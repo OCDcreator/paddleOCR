@@ -26,6 +26,8 @@ class OCREngine(Protocol):
 
     def supported_settings(self) -> list[SupportedSetting]: ...
 
+    def verify_available(self) -> None: ...
+
 
 class SupportedSetting:
     """Declares one configurable key an engine accepts via apply_settings."""

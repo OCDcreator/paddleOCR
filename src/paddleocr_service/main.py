@@ -272,8 +272,22 @@ def create_app(
                     status_code=422,
                     detail=f"unknown engine: {new_name!r} (available: {available_engines()})",
                 )
+            new_engine = create_engine(new_name, app_settings)
+            # Fail fast if the engine's library is not installed: verify the import
+            # before committing the swap, so a missing library returns 422 instead of
+            # silently replacing the engine with one that breaks the next recognize().
+            try:
+                new_engine.verify_available()
+            except ImportError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"engine {new_name!r} is not available: {exc}. "
+                        f"Install its package (e.g. `uv sync --extra {new_name}`)."
+                    ),
+                ) from exc
             app_settings.engine = new_name
-            engine = create_engine(new_name, app_settings)
+            engine = new_engine
             if app_settings.warmup_on_startup:
                 engine.warm_up()
 

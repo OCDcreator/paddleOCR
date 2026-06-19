@@ -26,6 +26,8 @@ class _FakeEngine:
     def supported_settings(self) -> list[SupportedSetting]:
         return []
 
+    def verify_available(self) -> None: ...
+
 
 def test_available_engines_is_a_list_of_strings() -> None:
     names = registry.available_engines()

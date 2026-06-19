@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -72,6 +73,15 @@ class RapidOCREngine:
 
     def supported_settings(self) -> list[SupportedSetting]:
         return list(_SUPPORTED)
+
+    def verify_available(self) -> None:
+        """Import the underlying library without loading the model.
+
+        Raises ImportError if rapidocr_onnxruntime is not installed. Used at
+        swap time so a missing library fails fast (HTTP 422) instead of leaving a
+        half-constructed engine that breaks the next recognize() call.
+        """
+        importlib.import_module("rapidocr_onnxruntime")
 
     def _load_ocr(self) -> Any:
         if self._ocr is None:

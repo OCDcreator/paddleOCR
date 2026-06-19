@@ -28,6 +28,9 @@ class EngineProtocolMixin:
     def supported_settings(self) -> list[SupportedSetting]:
         return []
 
+    def verify_available(self) -> None:
+        pass
+
 
 class FakeEngine:
     is_ready = True

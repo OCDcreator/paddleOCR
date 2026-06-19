@@ -38,6 +38,9 @@ class FakeEngine:
     def supported_settings(self):
         return []
 
+    def verify_available(self) -> None:
+        pass
+
 
 def png_bytes() -> bytes:
     image = Image.new("RGB", (80, 30), color="white")
