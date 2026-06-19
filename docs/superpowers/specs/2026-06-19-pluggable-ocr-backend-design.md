@@ -117,10 +117,12 @@ Moved to `engines/paddleocr/engine.py`. Changes:
 
 ## Runtime Hot-Swap
 
-`PATCH /settings` is extended:
-1. If the body includes `engine` and it differs from the current engine, **swap**: replace the engine instance via `create_engine(new_name, app_settings)`, warm it up if `warmup_on_startup` is on. Old engine-specific settings are NOT carried over (different engines have incompatible settings; the caller must re-supply them).
-2. All other keys go to `current_engine.apply_settings(**opts)`. Unknown-for-this-engine keys raise → `PATCH /settings` returns **422** with `"engine <name> does not support key <key>"`.
+`PATCH /settings` is extended. The handler processes the body in this fixed order:
+1. If the body includes `engine` and it differs from the current engine, **swap first**: replace the engine instance via `create_engine(new_name, app_settings)`, warm it up if `warmup_on_startup` is on. Old engine-specific settings are NOT carried over (different engines have incompatible settings; the caller must re-supply them). The new engine is now the "current engine" for the rest of this request.
+2. Then all remaining keys go to `current_engine.apply_settings(**opts)` — i.e. applied to the NEW engine if a swap just happened. Unknown-for-this-engine keys raise → `PATCH /settings` returns **422** with `"engine <name> does not support key <key>"`.
 3. `GET /settings` returns `current_engine` plus `supported_settings()` for the active engine, replacing the hardcoded field list.
+
+This ordering means a single `PATCH /settings {"engine": "paddleocr", "language": "en"}` swaps to PaddleOCR and sets its language in one request.
 
 **Concurrency safety of the swap:** the swap replaces a reference to the engine object. A recognition already in flight (running in a threadpool) keeps its own reference to the old engine and finishes on it; the old object is not GC'd until that call returns. The next recognition uses the new engine. Reference assignment is atomic and there is a single asyncio worker, so no lock is needed. An in-flight OCR is NOT interrupted (single images are ~0.2–5 s; blocking global swap on idle is not worth the complexity).
 
