@@ -1,0 +1,12 @@
+{
+  "bodyClientWidth": 1425,
+  "bodyScrollWidth": 1425,
+  "horizontalOverflow": false,
+  "tabsDisplay": "none",
+  "uiKit": "shadcn-ui",
+  "viewport": {
+    "height": 1000,
+    "width": 1440
+  },
+  "workspaceColumns": "320px 686px 330px"
+}

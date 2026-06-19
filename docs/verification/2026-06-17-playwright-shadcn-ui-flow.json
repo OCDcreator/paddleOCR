@@ -1,0 +1,37 @@
+{
+  "initial": {
+    "title": "PaddleOCR LAN Console",
+    "uiKit": "shadcn-ui",
+    "cards": 6,
+    "badges": 22,
+    "tabs": 3,
+    "accessLog": "logs/p1-access.log",
+    "cors": "http://phone.local",
+    "horizontalOverflow": false,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    }
+  },
+  "singleText": "{\n  \"text\": \"PaddleOCR LAN Test\\nInvoice No: OCR-8866\\nAmount: 123.45 USD\",\n  \"items\": [\n    {\n      \"text\": \"PaddleOCR LAN Test\",\n      \"confidence\": 0.9999119639396667,\n      \"box\": [\n        [\n          62,\n          28\n        ],\n        [\n          803,\n          31\n        ],\n        [\n          802,\n          96\n        ],\n        [\n          62,\n          93\n        ]\n      ]\n    },\n    {\n      \"text\": \"Invoice No: OCR-8866\",\n      \"confidence\": 0.9927881360054016,\n      \"box\": [\n        [\n          56,\n          146\n        ],\n        [\n          587,\n          146\n        ],\n        [\n          587,\n          196\n        ],\n        [\n          56,\n          196\n        ]\n      ]\n    },\n    {\n      \"text\": \"Amount: 123.45 USD\",\n      \"confidence\": 0.9898504614830017,\n      \"box\": [\n        [\n          58,\n          221\n        ],\n        [\n          550,\n          221\n        ],\n        [\n          550,\n          267\n        ],\n        [\n          58,\n          267\n        ]\n      ]\n    }\n  ],\n  \"elapsed_ms\": 1295\n}",
+  "batchMeta": "批量图片 · succeeded · 2/2",
+  "pdfMeta": "PDF · succeeded · 2/2",
+  "pdfText": "ocr_sample.pdf / Page 2\n\nPaddleOCR PDF Page 2\nTotal: 678.90 USD\n\nPaddleOCR PDF Page 2 (100%)\nTotal: 678.90 USD (100%)",
+  "copyToast": "文本已复制",
+  "downloads": {
+    "json": "/jobs/614d938ab5434e4586294366bc03544b/download/json",
+    "txt": "/jobs/614d938ab5434e4586294366bc03544b/download/txt",
+    "markdown": "/jobs/614d938ab5434e4586294366bc03544b/download/markdown"
+  },
+  "cleanupOutput": "{\n  \"deleted_jobs\": 0,\n  \"retention_days\": 0\n}",
+  "mobile": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "tabsDisplay": "grid",
+    "horizontalOverflow": false,
+    "bodyScrollWidth": 390,
+    "bodyClientWidth": 390
+  }
+}

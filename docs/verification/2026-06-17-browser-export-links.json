@@ -1,0 +1,13 @@
+{
+  "detail": "文本已复制",
+  "links": {
+    "下载 JSON": "http://127.0.0.1:8866/jobs/5bfdc9f857c347cb81435f06cf456ba4/download/json",
+    "下载 Markdown": "http://127.0.0.1:8866/jobs/5bfdc9f857c347cb81435f06cf456ba4/download/markdown",
+    "下载 TXT": "http://127.0.0.1:8866/jobs/5bfdc9f857c347cb81435f06cf456ba4/download/txt"
+  },
+  "texts": {
+    "下载 JSON": "contains job id, kind pdf, status succeeded",
+    "下载 Markdown": "starts with # OCR Job and includes Page 1",
+    "下载 TXT": "includes Page 1 and Page 2 recognized text"
+  }
+}

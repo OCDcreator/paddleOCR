@@ -1,0 +1,11 @@
+## ocr_sample.png
+[Page 1]
+PaddleOCR LAN Test
+Invoice No: OCR-8866
+Amount: 123.45 USD
+
+## ocr_sample.png
+[Page 1]
+PaddleOCR LAN Test
+Invoice No: OCR-8866
+Amount: 123.45 USD

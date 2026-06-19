@@ -1,0 +1,43 @@
+- heading "PaddleOCR LAN Console" [level=1, ref=e3]
+- button "刷新状态" [ref=e7]
+- button "暂停队列" [ref=e8]
+- button "恢复队列" [ref=e9]
+- region "服务状态" [ref=e1]
+- region "上传工作台" [ref=e2]
+  - heading "单张图片" [level=2, ref=e10]
+  - button "选择文件" [ref=e11]: ocr_sample.png
+  - button "立即识别" [ref=e12]
+  - heading "批量图片" [level=2, ref=e13]
+  - button "选择文件" [ref=e14]: 2 个文件
+  - button "加入队列" [ref=e15]
+  - heading "PDF" [level=2, ref=e16]
+  - button "选择文件" [ref=e17]: ocr_sample.pdf
+  - button "加入队列" [ref=e18]
+- region "历史记录" [ref=e4]
+  - heading "历史记录" [level=2, ref=e19]
+  - button "刷新" [ref=e20]
+  - button "pdf succeeded · 2/2" [ref=e31]
+  - button "image_batch succeeded · 2/2" [ref=e32]
+  - button "image_batch succeeded · 2/2" [ref=e33]
+  - button "pdf succeeded · 2/2" [ref=e34]
+- region "结果详情" [ref=e5]
+  - heading "结果详情" [level=2, ref=e21]
+  - button "复制文本" [ref=e22]
+  - link "下载 JSON" [ref=e23]
+  - link "下载 TXT" [ref=e24]
+  - link "下载 Markdown" [ref=e25]
+  - button "ocr_sample.pdf · 1" [ref=e35]
+  - button "ocr_sample.pdf · 2" [ref=e36]
+  - button "重试失败任务" [ref=e26]
+  - button "取消任务" [ref=e27]
+  - button "删除任务" [ref=e28]
+- region "设置" [ref=e6]
+  - heading "设置" [level=2, ref=e29]
+  - button "模型预热" [ref=e30]
+  - textbox "OCR 语言" [ref=e40]: ch
+  - spinbutton "PDF 渲染倍率" [ref=e41]: 2
+  - spinbutton "最大上传 MB" [ref=e42]: 50
+  - spinbutton "保留天数" [ref=e43]: 0
+  - checkbox "保存原始上传文件" [checked=false, ref=e37]
+  - checkbox "启动时预热模型" [checked=false, ref=e38]
+  - button "保存设置" [ref=e39]

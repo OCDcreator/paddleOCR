@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PaddleOCR LAN Console</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body data-ui-kit="shadcn-ui">
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="brand-block">
+          <span class="badge badge-outline">LAN OCR</span>
+          <h1>PaddleOCR LAN Console</h1>
+          <p>局域网私有 OCR 工作台</p>
+        </div>
+        <div class="command-bar" aria-label="全局操作">
+          <button id="refreshHealth" class="btn btn-outline" type="button">刷新状态</button>
+          <button id="pauseQueue" class="btn btn-secondary" type="button">暂停队列</button>
+          <button id="resumeQueue" class="btn btn-secondary" type="button">恢复队列</button>
+        </div>
+      </header>
+
+      <section class="status-grid" aria-label="服务状态">
+        <article class="status-card">
+          <span class="stat-label">服务</span>
+          <strong id="serviceStatus" class="stat-value">-</strong>
+        </article>
+        <article class="status-card">
+          <span class="stat-label">模型</span>
+          <strong id="modelStatus" class="stat-value">-</strong>
+        </article>
+        <article class="status-card">
+          <span class="stat-label">队列</span>
+          <strong id="queueStatus" class="stat-value">-</strong>
+        </article>
+        <article class="status-card">
+          <span class="stat-label">磁盘</span>
+          <strong id="diskStatus" class="stat-value">-</strong>
+        </article>
+      </section>
+
+      <section class="upload-grid" aria-label="上传工作台">
+        <form id="singleForm" class="card upload-card">
+          <div class="card-header compact">
+            <div>
+              <h2 class="card-title">单张图片</h2>
+            </div>
+            <span class="badge">同步</span>
+          </div>
+          <label class="field">
+            <span>图片文件</span>
+            <input id="singleImage" class="input" type="file" accept="image/*" required />
+          </label>
+          <button class="btn" type="submit">立即识别</button>
+        </form>
+
+        <form id="batchForm" class="card upload-card">
+          <div class="card-header compact">
+            <div>
+              <h2 class="card-title">批量图片</h2>
+            </div>
+            <span class="badge badge-blue">队列</span>
+          </div>
+          <label class="field">
+            <span>图片文件</span>
+            <input id="batchImages" class="input" type="file" accept="image/*" multiple required />
+          </label>
+          <button class="btn" type="submit">加入队列</button>
+        </form>
+
+        <form id="pdfForm" class="card upload-card">
+          <div class="card-header compact">
+            <div>
+              <h2 class="card-title">PDF</h2>
+            </div>
+            <span class="badge badge-amber">分页</span>
+          </div>
+          <label class="field">
+            <span>PDF 文件</span>
+            <input id="pdfFile" class="input" type="file" accept="application/pdf" required />
+          </label>
+          <button class="btn" type="submit">加入队列</button>
+        </form>
+      </section>
+
+      <nav class="tabs-list" aria-label="工作区导航">
+        <button class="tabs-trigger active" type="button" data-scroll-target="historyPanel">
+          历史记录
+        </button>
+        <button class="tabs-trigger" type="button" data-scroll-target="resultPanel">
+          结果详情
+        </button>
+        <button class="tabs-trigger" type="button" data-scroll-target="settingsPanel">
+          设置
+        </button>
+      </nav>
+
+      <section class="workspace-grid">
+        <section id="historyPanel" class="card panel history-panel" aria-label="历史记录">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">历史记录</h2>
+            </div>
+            <button id="refreshJobs" class="btn btn-outline btn-sm" type="button">刷新</button>
+          </div>
+          <div id="jobs" class="jobs scroll-area"></div>
+        </section>
+
+        <section id="resultPanel" class="card panel detail-panel" aria-label="结果详情">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">结果详情</h2>
+              <div id="detailMeta" class="detail-meta">等待操作...</div>
+            </div>
+            <div class="result-actions">
+              <button id="copyText" class="btn btn-outline btn-sm" type="button">复制文本</button>
+              <a id="downloadJson" class="btn btn-secondary btn-sm button-link" href="#" download>
+                下载 JSON
+              </a>
+              <a id="downloadTxt" class="btn btn-secondary btn-sm button-link" href="#" download>
+                下载 TXT
+              </a>
+              <a
+                id="downloadMarkdown"
+                class="btn btn-secondary btn-sm button-link"
+                href="#"
+                download
+              >
+                下载 Markdown
+              </a>
+            </div>
+          </div>
+          <div id="jobError" class="alert hidden"></div>
+          <div id="pageNav" class="page-nav" aria-label="PDF 分页导航"></div>
+          <pre id="output" class="result-output">等待操作...</pre>
+          <div class="job-actions">
+            <button id="retryJob" class="btn btn-outline" type="button">重试失败任务</button>
+            <button id="cancelJob" class="btn btn-secondary" type="button">取消任务</button>
+            <button id="deleteJob" class="btn btn-danger" type="button">删除任务</button>
+          </div>
+        </section>
+
+        <section id="settingsPanel" class="card panel settings-panel" aria-label="设置">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">设置</h2>
+            </div>
+            <div class="ops-actions">
+              <button id="warmupModel" class="btn btn-outline btn-sm" type="button">模型预热</button>
+              <button id="runRetentionCleanup" class="btn btn-secondary btn-sm" type="button">
+                保留清理
+              </button>
+            </div>
+          </div>
+          <form id="settingsForm" class="settings-form">
+            <label class="field">
+              <span>OCR 语言</span>
+              <input id="settingLanguage" class="input" name="language" type="text" />
+            </label>
+            <label class="field">
+              <span>PDF 渲染倍率</span>
+              <input
+                id="settingPdfScale"
+                class="input"
+                name="pdf_render_scale"
+                type="number"
+                min="1"
+                max="4"
+                step="0.25"
+              />
+            </label>
+            <label class="field">
+              <span>最大上传 MB</span>
+              <input
+                id="settingMaxUploadMb"
+                class="input"
+                name="max_upload_mb"
+                type="number"
+                min="1"
+                step="1"
+              />
+            </label>
+            <label class="field">
+              <span>保留天数</span>
+              <input
+                id="settingRetentionDays"
+                class="input"
+                name="retention_days"
+                type="number"
+                min="0"
+                step="1"
+              />
+            </label>
+            <label class="check-row">
+              <input id="settingSaveUploads" name="save_uploads" type="checkbox" />
+              <span>保存原始上传文件</span>
+            </label>
+            <label class="check-row">
+              <input id="settingWarmup" name="warmup_on_startup" type="checkbox" />
+              <span>启动时预热模型</span>
+            </label>
+            <button class="btn" type="submit">保存设置</button>
+          </form>
+          <dl class="ops-list">
+            <div>
+              <dt>版本</dt>
+              <dd id="versionInfo">-</dd>
+            </div>
+            <div>
+              <dt>模型缓存</dt>
+              <dd id="modelCachePath">-</dd>
+            </div>
+            <div>
+              <dt>数据库</dt>
+              <dd id="databasePath">-</dd>
+            </div>
+            <div>
+              <dt>访问日志</dt>
+              <dd id="accessLogPath">-</dd>
+            </div>
+            <div>
+              <dt>CORS</dt>
+              <dd id="corsOrigins">-</dd>
+            </div>
+          </dl>
+        </section>
+      </section>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

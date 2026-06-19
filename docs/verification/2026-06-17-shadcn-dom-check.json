@@ -1,0 +1,17 @@
+{
+  "accessLogVisible": "logs/p1-access.log",
+  "bodyClientWidth": 375,
+  "bodyScrollWidth": 375,
+  "corsVisible": "http://phone.local",
+  "hasBadges": 22,
+  "hasCards": 6,
+  "hasTabs": 3,
+  "horizontalOverflow": false,
+  "overflowing": [],
+  "title": "PaddleOCR LAN Console",
+  "uiKit": "shadcn-ui",
+  "viewport": {
+    "height": 844,
+    "width": 390
+  }
+}

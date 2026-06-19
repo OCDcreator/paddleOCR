@@ -1,0 +1,16 @@
+job_id=2f2da663844f43388a5c70a6da1819ed
+detail_status=200
+txt_status=200
+detail={
+  "id": "2f2da663844f43388a5c70a6da1819ed",
+  "kind": "image_batch",
+  "status": "succeeded",
+  "completed_units": 2,
+  "total_units": 2,
+  "has_outputs": [
+    "json",
+    "markdown",
+    "txt"
+  ]
+}
+txt_head=## ocr_sample.png [Page 1] PaddleOCR LAN Test 

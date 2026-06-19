@@ -1,0 +1,43 @@
+[project]
+name = "paddleocr-lan-service"
+version = "0.1.0"
+description = "LAN HTTP API wrapper for local PaddleOCR single-image OCR."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "pillow>=10.0.0",
+    "pydantic-settings>=2.4.0",
+    "paddlepaddle>=3.0.0,<4.0.0",
+    "paddleocr>=3.7.0,<3.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.27.0",
+    "pytest>=8.3.0",
+    "ruff>=0.6.0",
+]
+
+[project.scripts]
+paddleocr-lan-service = "paddleocr_service.main:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/paddleocr_service"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

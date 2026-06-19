@@ -1,0 +1,55 @@
+{
+  "health_status": "ok",
+  "settings_round_trip": {
+    "language": "ch",
+    "use_angle_cls": true,
+    "warmup_on_startup": false,
+    "save_uploads": false,
+    "max_upload_bytes": 52428800,
+    "pdf_render_scale": 2.0,
+    "retention_days": 0,
+    "cors_origins": [
+      "http://phone.local"
+    ],
+    "access_log_path": "logs/p1-access.log"
+  },
+  "settings_validation_statuses": {
+    "bad_upload_limit": 422,
+    "bad_pdf_scale": 422,
+    "bad_retention": 422
+  },
+  "cors_preflight": {
+    "status_code": 200,
+    "allow_origin": "http://phone.local"
+  },
+  "single_text": "PaddleOCR LAN Test\nInvoice No: OCR-8866\nAmount: 123.45 USD",
+  "batch_status": "succeeded",
+  "batch_documents": 2,
+  "pdf_status": "succeeded",
+  "pdf_pages": 2,
+  "history_count": 18,
+  "download_json_has_job_id": true,
+  "download_txt_chars": 173,
+  "download_markdown_has_heading": true,
+  "queue_controls": {
+    "job_id": "acdbd34448224ef09caa9e5d5f2e242f",
+    "canceled_status": "canceled",
+    "retry_status": "queued",
+    "final_status": "succeeded"
+  },
+  "retention_cleanup": {
+    "deleted_jobs": 0,
+    "retention_days": 0
+  },
+  "delete_status_code_after_delete": 404,
+  "final_queue": {
+    "running": 0,
+    "queued": 0,
+    "succeeded": 18,
+    "failed": 0,
+    "canceled": 0,
+    "total_jobs": 18,
+    "worker_running": true,
+    "paused": false
+  }
+}

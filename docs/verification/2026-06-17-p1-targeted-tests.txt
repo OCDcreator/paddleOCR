@@ -1,0 +1,7 @@
+uv run --extra dev pytest tests/test_settings_and_limits_api.py tests/test_pdf_api.py tests/test_operations_api.py tests/test_frontend.py -q
+..............                                                           [100%]
+14 passed in 0.69s
+
+uv run --extra dev pytest tests/test_config.py -q
+.                                                                        [100%]
+1 passed in 0.08s

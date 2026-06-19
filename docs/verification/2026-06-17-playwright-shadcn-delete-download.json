@@ -1,0 +1,34 @@
+{
+  "before": {
+    "meta": "PDF · succeeded · 2/2",
+    "links": {
+      "json": "/jobs/614d938ab5434e4586294366bc03544b/download/json",
+      "txt": "/jobs/614d938ab5434e4586294366bc03544b/download/txt",
+      "markdown": "/jobs/614d938ab5434e4586294366bc03544b/download/markdown"
+    }
+  },
+  "downloadResponses": {
+    "json": {
+      "status": 200,
+      "contentType": "application/json",
+      "textIncludesSample": true
+    },
+    "txt": {
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "textIncludesSample": true
+    },
+    "markdown": {
+      "status": 200,
+      "contentType": "text/markdown; charset=utf-8",
+      "textIncludesSample": true
+    }
+  },
+  "selectedId": "614d938ab5434e4586294366bc03544b",
+  "detailAfterDelete": 404,
+  "after": {
+    "detailMeta": "任务已删除",
+    "output": "任务和输出文件已删除。",
+    "horizontalOverflow": false
+  }
+}

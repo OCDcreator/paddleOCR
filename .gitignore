@@ -1,0 +1,16 @@
+.env
+.venv/
+.pytest_cache/
+.ruff_cache/
+.zcode/
+.codex/
+.opencode/
+.claude/
+__pycache__/
+*.py[cod]
+AGENTS.md
+samples/
+data/
+logs/
+outputs/
+uploads/
