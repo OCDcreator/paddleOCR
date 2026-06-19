@@ -151,6 +151,29 @@ uv run python scripts/functional_check.py
 
 功能脚本覆盖 health、设置、设置校验、CORS preflight、单图、批量图片、PDF、历史、导出下载、删除、暂停/取消/重试、保留清理。
 
+## 引擎对比基准
+
+对比 PaddleOCR(默认 / 轻量档)与 RapidOCR 的速度和精度(纯本地,基于带标准答案的合成图):
+
+```bash
+# 1. 生成测试图(跨平台;无中文字体时自动跳过中文图)
+uv run python scripts/benchmark_fixtures.py
+
+# 2. (可选)为各引擎建独立 venv,避免依赖冲突
+uv venv .venv-bench-paddleocr && uv pip install --python .venv-bench-paddleocr paddleocr paddlepaddle pillow
+uv venv .venv-bench-rapidocr && uv pip install --python .venv-bench-rapidocr rapidocr_onnxruntime pillow
+
+# 3. 跑基准(默认预热 1 次、计时 5 次,取中位数)
+uv run python scripts/benchmark_engines.py
+
+# 只跑指定引擎
+uv run python scripts/benchmark_engines.py --only paddleocr-default,rapidocr
+```
+
+报告写到 `docs/verification/<date>-engine-benchmark.{json,md}`。引擎未安装时会标记 `unavailable` 而不中断。
+
+轻量档说明:PaddleOCR 3.7.0 没有 PP-OCRv5 移动端检测模型(只有 server),所以轻量档用最新的 `PP-OCRv4_mobile_det` 检测模型,识别模型仍是默认的 `PP-OCRv6_medium_rec`。
+
 ## 运维
 
 - SQLite 数据库默认在 `data/paddleocr.sqlite3`。

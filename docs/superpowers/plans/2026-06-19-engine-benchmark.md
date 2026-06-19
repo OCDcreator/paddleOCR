@@ -302,10 +302,9 @@ def build_engine(lang: str, tier: str) -> Any:
 
     kwargs: dict[str, Any] = {"lang": lang, "use_textline_orientation": True}
     if tier == "mobile":
-        # PaddleOCR 3.x lightweight server/mobile detection model. If this kwarg
-        # is unsupported by the installed version, PaddleOCR raises and the
-        # contender is reported unavailable by the driver.
-        kwargs["text_detection_model_name"] = "PP-OCRv5_mobile_det"
+        # PaddleOCR 3.7.0 ships no PP-OCRv5 mobile detector (only server), so the
+        # newest available lightweight detection model is PP-OCRv4_mobile_det.
+        kwargs["text_detection_model_name"] = "PP-OCRv4_mobile_det"
     return PaddleOCR(**kwargs)
 
 
@@ -402,13 +401,17 @@ def _box(box: Any) -> list[list[float]]:
 def normalize(result: Any) -> list[dict]:
     """Normalize RapidOCR output into {text, confidence, box}.
 
-    RapidOCR (rapidocr_onnxruntime) RapidOCR().call(img) returns an object whose
-    .txts / .scores / .boxes give the recognized lines; older versions return a
-    list of [box, text, score]. Handle both.
+    RapidOCR (rapidocr_onnxruntime) returns a 2-tuple: (lines, elapse), where
+    `lines` is a list of [box, text, score] entries and `elapse` is a timing
+    list. Newer unified `rapidocr` returns a Result object with .txts/.scores/
+    .boxes. Handle all shapes.
     """
     items: list[dict] = []
     if result is None:
         return items
+    # Unpack the (lines, elapse) tuple shape from rapidocr_onnxruntime.
+    if isinstance(result, tuple) and len(result) >= 1 and isinstance(result[0], list):
+        result = result[0]
     txts = getattr(result, "txts", None)
     scores = getattr(result, "scores", None)
     boxes = getattr(result, "boxes", None)
