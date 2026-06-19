@@ -49,11 +49,11 @@ def _parse_candidate(candidate: Any) -> list[OCRItemDict]:
 
 def _parse_dict_candidate(candidate: dict[str, Any]) -> list[OCRItemDict]:
     if "rec_texts" in candidate and "rec_scores" in candidate:
-        boxes = (
-            candidate.get("rec_polys")
-            or candidate.get("dt_polys")
-            or candidate.get("rec_boxes")
-        )
+        # Use explicit `is None` checks, NOT `or` chains: PaddleOCR returns numpy
+        # arrays here, and an empty array raises ValueError under boolean
+        # conversion ("truth value of an empty array is ambiguous"). The `or`
+        # operator coerces to bool, so it crashes on no-text results.
+        boxes = _first_present(candidate, "rec_polys", "dt_polys", "rec_boxes")
         if boxes is None:
             return []
 
@@ -71,18 +71,27 @@ def _parse_dict_candidate(candidate: dict[str, Any]) -> list[OCRItemDict]:
             )
         ]
 
-    text = candidate.get("text") or candidate.get("rec_text") or candidate.get("label")
-    confidence = (
-        candidate.get("confidence")
-        or candidate.get("score")
-        or candidate.get("rec_score")
-        or candidate.get("prob")
-    )
-    box = candidate.get("box") or candidate.get("points") or candidate.get("dt_polys")
+    text = _first_present(candidate, "text", "rec_text", "label")
+    confidence = _first_present(candidate, "confidence", "score", "rec_score", "prob")
+    box = _first_present(candidate, "box", "points", "dt_polys")
     if text is None or confidence is None or box is None:
         return []
 
     return [{"text": str(text), "confidence": float(confidence), "box": _normalize_box(box)}]
+
+
+def _first_present(mapping: dict[str, Any], *keys: str) -> Any:
+    """Return the first value for ``keys`` whose value is not ``None``.
+
+    Unlike ``a or b or c``, this never coerces values to bool, so it is safe for
+    numpy/ndarray values (which raise on boolean conversion). Returns ``None`` if
+    no key is present (or all present values are ``None``).
+    """
+    for key in keys:
+        value = mapping.get(key)
+        if value is not None:
+            return value
+    return None
 
 
 def _normalize_box(box: Any) -> list[list[float]]:

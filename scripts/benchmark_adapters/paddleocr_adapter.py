@@ -26,18 +26,18 @@ def normalize(raw: Any) -> list[dict]:
             texts = candidate.get("rec_texts")
             scores = candidate.get("rec_scores")
             if texts is not None and scores is not None:
-                boxes = (
-                    candidate.get("rec_polys")
-                    or candidate.get("dt_polys")
-                    or candidate.get("rec_boxes")
-                    or []
-                )
+                # Explicit `is None` checks, NOT `or` chains: PaddleOCR returns
+                # numpy arrays here, and an empty array raises ValueError under
+                # boolean conversion. See parse_paddleocr_result in the service.
+                boxes = _first_present(candidate, "rec_polys", "dt_polys", "rec_boxes")
+                if boxes is None:
+                    boxes = []
                 for text, score, box in zip(texts, scores, boxes, strict=False):
                     items.append({"text": str(text), "confidence": float(score), "box": _box(box)})
                 continue
-            text = candidate.get("text") or candidate.get("rec_text")
-            score = candidate.get("confidence") or candidate.get("score")
-            box = candidate.get("box") or candidate.get("points") or candidate.get("dt_polys")
+            text = _first_present(candidate, "text", "rec_text")
+            score = _first_present(candidate, "confidence", "score")
+            box = _first_present(candidate, "box", "points", "dt_polys")
             if text is not None and score is not None and box is not None:
                 items.append({"text": str(text), "confidence": float(score), "box": _box(box)})
             continue
@@ -47,6 +47,15 @@ def normalize(raw: Any) -> list[dict]:
             if isinstance(tas, (list, tuple)) and len(tas) >= 2:
                 items.append({"text": str(tas[0]), "confidence": float(tas[1]), "box": box})
     return items
+
+
+def _first_present(mapping: dict, *keys: str):
+    """First non-None value among keys; never coerces to bool (numpy-safe)."""
+    for key in keys:
+        value = mapping.get(key)
+        if value is not None:
+            return value
+    return None
 
 
 def _box(box: Any) -> list[list[float]]:
