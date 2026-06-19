@@ -10,6 +10,10 @@ from paddleocr_service.main import create_app
 class FakeEngine:
     is_ready = True
 
+    @property
+    def name(self) -> str:
+        return "fake"
+
     def recognize(self, image_bytes: bytes):
         self.last_image_bytes = image_bytes
         return [
@@ -24,6 +28,15 @@ class FakeEngine:
                 "box": [[1.0, 15.0], [30.0, 15.0], [30.0, 25.0], [1.0, 25.0]],
             },
         ]
+
+    def warm_up(self) -> None:
+        pass
+
+    def apply_settings(self, **opts):
+        return opts
+
+    def supported_settings(self):
+        return []
 
 
 def png_bytes() -> bytes:

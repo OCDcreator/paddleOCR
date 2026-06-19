@@ -2,10 +2,10 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from paddleocr_service.main import create_app
-from tests.helpers import make_settings
+from tests.helpers import EngineProtocolMixin, make_settings
 
 
-class ReadyEngine:
+class ReadyEngine(EngineProtocolMixin):
     is_ready = True
 
 
@@ -21,5 +21,5 @@ async def test_health_reports_loaded_engine(tmp_path) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["ocr_loaded"] is True
+    assert data["engine_ready"] is True
     assert data["queue"]["total_jobs"] == 0

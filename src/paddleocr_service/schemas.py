@@ -17,7 +17,8 @@ class OCRResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
-    ocr_loaded: bool
+    engine_ready: bool
+    engine: str | None = None
     queue: dict[str, int | bool] | None = None
     version: str | None = None
     settings: dict[str, Any] | None = None

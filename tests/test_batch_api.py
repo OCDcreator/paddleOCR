@@ -6,10 +6,10 @@ from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 from paddleocr_service.main import create_app
-from tests.helpers import make_settings
+from tests.helpers import EngineProtocolMixin, make_settings
 
 
-class FakeEngine:
+class FakeEngine(EngineProtocolMixin):
     is_ready = True
 
     def recognize(self, image_bytes: bytes):

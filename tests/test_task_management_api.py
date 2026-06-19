@@ -7,12 +7,19 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from paddleocr_service.main import create_app
-from tests.helpers import FakeEngine, FlakyEngine, make_settings, png_bytes, wait_for_job
+from tests.helpers import (
+    EngineProtocolMixin,
+    FakeEngine,
+    FlakyEngine,
+    make_settings,
+    png_bytes,
+    wait_for_job,
+)
 
 pytestmark = pytest.mark.anyio
 
 
-class BlockingEngine:
+class BlockingEngine(EngineProtocolMixin):
     is_ready = True
 
     def __init__(self) -> None:

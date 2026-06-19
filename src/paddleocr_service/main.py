@@ -20,6 +20,7 @@ from starlette.concurrency import run_in_threadpool
 
 from paddleocr_service.config import Settings, get_settings
 from paddleocr_service.database import JobRepository
+from paddleocr_service.engines.registry import available_engines, create_engine
 from paddleocr_service.jobs import (
     OCRJobQueue,
     build_handler_from_source,
@@ -28,7 +29,6 @@ from paddleocr_service.jobs import (
     source_payload_for_images,
     source_payload_for_pdf,
 )
-from paddleocr_service.ocr_engine import PaddleOCREngine
 from paddleocr_service.operations import AccessLogMiddleware, cleanup_expired_jobs
 from paddleocr_service.pdf import render_pdf_pages
 from paddleocr_service.schemas import HealthResponse, OCRResponse
@@ -42,7 +42,7 @@ def create_app(
     pdf_renderer: Any | None = None,
 ) -> FastAPI:
     app_settings = settings or get_settings()
-    engine = ocr_engine or PaddleOCREngine(app_settings)
+    engine = ocr_engine or create_engine(app_settings.engine, app_settings)
     storage = LocalStorage(app_settings)
     storage.ensure_base_dirs()
     repository = JobRepository(app_settings.database_path)
@@ -90,10 +90,11 @@ def create_app(
     def health() -> dict[str, Any]:
         return {
             "status": "ok",
-            "ocr_loaded": bool(engine.is_ready),
+            "engine_ready": bool(engine.is_ready),
+            "engine": app_settings.engine,
             "queue": queue.stats(),
             "version": _package_version(),
-            "settings": _public_settings(app_settings),
+            "settings": _public_settings(app_settings, engine),
             "storage": {
                 "database_path": str(app_settings.database_path),
                 "output_dir": str(app_settings.output_dir),
@@ -256,34 +257,69 @@ def create_app(
 
     @app.get("/settings")
     def get_runtime_settings() -> dict[str, Any]:
-        return _public_settings(app_settings)
+        return _public_settings(app_settings, engine)
 
     @app.patch("/settings")
     def update_runtime_settings(payload: dict[str, Any]) -> dict[str, Any]:
-        allowed = {
-            "language",
-            "use_angle_cls",
+        nonlocal engine
+        _validate_settings_patch(payload)
+
+        # 1. Swap engine first if requested.
+        if "engine" in payload and payload["engine"] != app_settings.engine:
+            new_name = payload["engine"]
+            if new_name not in available_engines():
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"unknown engine: {new_name!r} (available: {available_engines()})",
+                )
+            app_settings.engine = new_name
+            engine = create_engine(new_name, app_settings)
+            if app_settings.warmup_on_startup:
+                engine.warm_up()
+
+        # 2. Apply remaining keys to the (possibly new) current engine.
+        engine_keys = {s.key for s in engine.supported_settings()}
+        app_level_keys = {
             "warmup_on_startup",
             "save_uploads",
             "max_upload_bytes",
             "pdf_render_scale",
             "retention_days",
         }
-        _validate_settings_patch(payload)
+        unknown = set(payload) - {"engine"} - engine_keys - app_level_keys
+        if unknown:
+            raise HTTPException(
+                status_code=422,
+                detail=f"engine {engine.name!r} does not support key(s): {sorted(unknown)}",
+            )
+
         for key, value in payload.items():
-            if key in allowed:
+            # Persist onto app_settings when the field exists there (covers both
+            # app-level keys and engine keys that also live on Settings, e.g.
+            # language/use_angle_cls for PaddleOCR).
+            if key in app_level_keys or hasattr(app_settings, key):
                 setattr(app_settings, key, value)
-        if hasattr(engine, "configure"):
-            engine.configure(app_settings.language, app_settings.use_angle_cls)
+        # Push every engine-level key that the engine supports AND that exists on
+        # app_settings, using the current app_settings value. This mirrors the old
+        # configure(language, use_angle_cls) behavior: the engine always reflects
+        # the current settings, not just the keys in this PATCH body.
+        engine_opts = {
+            k: getattr(app_settings, k) for k in engine_keys if hasattr(app_settings, k)
+        }
+        if engine_opts:
+            try:
+                engine.apply_settings(**engine_opts)
+            except Exception as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
         storage.ensure_base_dirs()
-        return _public_settings(app_settings)
+        return _public_settings(app_settings, engine)
 
     @app.post("/operations/warmup")
     async def warmup_model() -> dict[str, Any]:
         if not hasattr(engine, "warm_up"):
             raise HTTPException(status_code=409, detail="OCR engine does not support warmup.")
         await run_in_threadpool(engine.warm_up)
-        return {"ocr_loaded": bool(engine.is_ready)}
+        return {"engine_ready": bool(engine.is_ready), "engine": app_settings.engine}
 
     @app.post("/operations/retention/cleanup")
     def cleanup_retention() -> dict[str, Any]:
@@ -316,8 +352,9 @@ if __name__ == "__main__":
     run()
 
 
-def _public_settings(settings: Settings) -> dict[str, Any]:
-    return {
+def _public_settings(settings: Settings, engine: Any | None = None) -> dict[str, Any]:
+    result = {
+        "engine": settings.engine,
         "language": settings.language,
         "use_angle_cls": settings.use_angle_cls,
         "warmup_on_startup": settings.warmup_on_startup,
@@ -328,6 +365,12 @@ def _public_settings(settings: Settings) -> dict[str, Any]:
         "cors_origins": settings.cors_origins,
         "access_log_path": str(settings.access_log_path),
     }
+    if engine is not None:
+        result["supported_settings"] = [
+            {"key": s.key, "type": s.type, "description": s.description}
+            for s in engine.supported_settings()
+        ]
+    return result
 
 
 def _enforce_upload_limit(payloads: list[bytes], max_upload_bytes: int) -> None:

@@ -2,9 +2,10 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from paddleocr_service.main import create_app
+from tests.helpers import EngineProtocolMixin
 
 
-class FakeEngine:
+class FakeEngine(EngineProtocolMixin):
     is_ready = False
 
 
