@@ -563,7 +563,6 @@ Create `scripts/benchmark_engines.py` with just the helpers so far (more added i
 ```python
 from __future__ import annotations
 
-import difflib
 import re
 import statistics
 from typing import Any
@@ -572,19 +571,6 @@ from typing import Any
 def normalize_text(text: str) -> str:
     """Lowercase, strip, collapse all whitespace runs to single spaces for scoring."""
     return re.sub(r"\s+", " ", text.strip().lower())
-
-
-def edit_distance(a: str, b: str) -> int:
-    """Levenshtein edit distance via difflib's opcode cost sum."""
-    if a == b:
-        return 0
-    cost = 0
-    for tag, i1, _i2, j1, _j2 in difflib.SequenceMatcher(a=a, b=b, autojunk=False).get_opcodes():
-        if tag == "equal":
-            continue
-        cost += max((i1 if tag != "insert" else 0), (j1 if tag != "delete" else 0)) * 0  # placeholder
-    # The opcode approach is fiddly; fall back to a clean DP Levenshtein.
-    return _levenshtein(a, b)
 
 
 def _levenshtein(a: str, b: str) -> int:
@@ -596,11 +582,14 @@ def _levenshtein(a: str, b: str) -> int:
     for i, ca in enumerate(a, 1):
         cur = [i]
         for j, cb in enumerate(b, 1):
-            cur.append(
-                min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb))
-            )
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
         prev = cur
     return prev[-1]
+
+
+def edit_distance(a: str, b: str) -> int:
+    """Levenshtein edit distance between two strings."""
+    return _levenshtein(a, b)
 
 
 def character_accuracy(truth: str, candidate: str) -> float:
@@ -701,19 +690,10 @@ Expected: FAIL — `AttributeError: module 'benchmark_engines' has no attribute 
 
 - [ ] **Step 3: Implement run_contender**
 
-Append to `scripts/benchmark_engines.py`:
+Append to `scripts/benchmark_engines.py`.
 
-```python
-import json
-import subprocess
-import sys
-import time
-from collections. defaultdict  # placeholder, removed below
-```
+First, add these imports at the top of the module alongside the existing ones (Task 4 added `difflib`, `re`, `statistics`, `typing.Any`):
 
-(Do NOT actually add a bad import — use the real additions below.) Add these real imports at the top alongside the existing ones, and append the function at the end of the module:
-
-Add to the import block at top:
 ```python
 import json
 import subprocess
@@ -722,7 +702,7 @@ import time
 from pathlib import Path
 ```
 
-Append the function:
+Then append the function below at the end of the module:
 ```python
 def run_contender(
     contender_id: str,
@@ -1080,7 +1060,7 @@ git commit -m "Document OCR engine benchmark usage in README"
 - Cross-platform (Mac + Windows) → font probe (Task 1), venv python path branching (Task 6). ✓
 - Out of scope respected: no service changes, no `.env` switch, no PDF, no cloud. ✓
 
-**2. Placeholder scan:** Fixed two inline risks during authoring — (a) removed the broken `difflib` opcode edit-distance placeholder and replaced with a clean `_levenshtein` DP; (b) flagged a stray `from collections import defaultdict` placeholder line in Task 5 Step 3 with an explicit "do NOT add this" note. The real imports to add are listed right after. No remaining TBD/TODO.
+**2. Placeholder scan:** Cleaned during authoring — `edit_distance` delegates directly to a clean `_levenshtein` DP (no dead `difflib` opcode loop), and the Task 5 import instructions list exactly which imports to add with no stray placeholder lines. No remaining TBD/TODO.
 
 **3. Type/signature consistency:** `run_contender` returns `samples` with keys `image/median_ms/runs/text/items/error`; `score_contender` reads exactly those plus the truth keys `image/text`. `median_latency`, `character_accuracy`, `exact_line_match_rate`, `_levenshtein`, `normalize_text` are defined in Task 4 and used unchanged in Tasks 5–6. Contender dict keys (`id/adapter/extra_args/venv/package`) are defined once in `CONTENDERS` (Task 6) and used consistently.
 
