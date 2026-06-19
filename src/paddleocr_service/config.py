@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         default=Path("logs/access.log"),
         alias="PADDLEOCR_ACCESS_LOG_PATH",
     )
+    engine: str = Field(default="rapidocr", alias="PADDLEOCR_ENGINE")
 
     model_config = SettingsConfigDict(
         env_file=".env",
