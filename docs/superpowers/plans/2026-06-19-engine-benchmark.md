@@ -401,13 +401,17 @@ def _box(box: Any) -> list[list[float]]:
 def normalize(result: Any) -> list[dict]:
     """Normalize RapidOCR output into {text, confidence, box}.
 
-    RapidOCR (rapidocr_onnxruntime) RapidOCR().call(img) returns an object whose
-    .txts / .scores / .boxes give the recognized lines; older versions return a
-    list of [box, text, score]. Handle both.
+    RapidOCR (rapidocr_onnxruntime) returns a 2-tuple: (lines, elapse), where
+    `lines` is a list of [box, text, score] entries and `elapse` is a timing
+    list. Newer unified `rapidocr` returns a Result object with .txts/.scores/
+    .boxes. Handle all shapes.
     """
     items: list[dict] = []
     if result is None:
         return items
+    # Unpack the (lines, elapse) tuple shape from rapidocr_onnxruntime.
+    if isinstance(result, tuple) and len(result) >= 1 and isinstance(result[0], list):
+        result = result[0]
     txts = getattr(result, "txts", None)
     scores = getattr(result, "scores", None)
     boxes = getattr(result, "boxes", None)
