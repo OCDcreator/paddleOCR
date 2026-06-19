@@ -135,7 +135,11 @@ def run_contender(
             }
         )
     proc.stdin.close()
-    proc.wait(timeout=30)
+    # All images processed; closing stdin makes the adapter's for-loop end and the
+    # process exits. Wait without a hard timeout: the per-line read above already
+    # enforces forward progress, and a fixed 30s cap could fire on slow CPU OCR
+    # runs (the default warmup=1/measured=5 over 5 fixtures is ~30 inferences).
+    proc.wait()
     return {"contender_id": contender_id, "status": "ok", "samples": samples}
 
 
