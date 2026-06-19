@@ -36,7 +36,7 @@ Each contender is a separate configuration to be measured:
 | Id | Engine | Configuration |
 |----|--------|---------------|
 | `paddleocr-default` | PaddleOCR | Current behavior: default model tier, `lang=ch`, `use_textline_orientation=true`. The baseline. |
-| `paddleocr-mobile` | PaddleOCR | Lightweight model tier, configured via PaddleOCR 3.x's documented smaller detection/recognition model parameters. If the installed version exposes no clean lightweight switch, this contender degrades to `unavailable` (covered by the failure rule below) rather than guessing args. The zero-cost optimization. |
+| `paddleocr-mobile` | PaddleOCR | Lightweight detection model. Configured via PaddleOCR 3.x's `text_detection_model_name` kwarg. PaddleOCR 3.7.0 ships no PP-OCRv5 mobile detector (only `PP-OCRv5_server_det`), so the newest available lightweight detector is **`PP-OCRv4_mobile_det`** — that is the model used for this contender. If the installed version removes this name, the contender degrades to `unavailable` (failure rule below) rather than guessing args. The zero-cost optimization. |
 | `rapidocr` | RapidOCR (ONNX Runtime) | Default Chinese model, CPU. The primary candidate. |
 
 A contender that fails to install or crashes is reported as `unavailable` and does not abort the run. The benchmark measures whichever contenders are present.

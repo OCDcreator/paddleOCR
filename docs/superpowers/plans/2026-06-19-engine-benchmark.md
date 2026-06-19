@@ -302,10 +302,9 @@ def build_engine(lang: str, tier: str) -> Any:
 
     kwargs: dict[str, Any] = {"lang": lang, "use_textline_orientation": True}
     if tier == "mobile":
-        # PaddleOCR 3.x lightweight server/mobile detection model. If this kwarg
-        # is unsupported by the installed version, PaddleOCR raises and the
-        # contender is reported unavailable by the driver.
-        kwargs["text_detection_model_name"] = "PP-OCRv5_mobile_det"
+        # PaddleOCR 3.7.0 ships no PP-OCRv5 mobile detector (only server), so the
+        # newest available lightweight detection model is PP-OCRv4_mobile_det.
+        kwargs["text_detection_model_name"] = "PP-OCRv4_mobile_det"
     return PaddleOCR(**kwargs)
 
 
