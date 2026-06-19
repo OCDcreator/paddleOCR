@@ -51,3 +51,53 @@ def test_exact_line_match_rate() -> None:
 def test_median_latency() -> None:
     driver = load_driver_module()
     assert driver.median_latency([100, 200, 300, 400, 500]) == 300
+
+
+def _python() -> str:
+    import sys
+
+    return sys.executable
+
+
+def test_run_contender_collects_results_from_fake_adapter(tmp_path) -> None:
+    driver = load_driver_module()
+    # Fake adapter: echoes elapsed_ms=10 and text=fake for any image it receives.
+    fake_adapter = tmp_path / "fake_adapter.py"
+    fake_adapter.write_text(
+        "import json, sys\n"
+        "for line in sys.stdin:\n"
+        "    line=line.strip()\n"
+        "    if not line: continue\n"
+        "    req=json.loads(line)\n"
+        "    res={'image':req['image'],'text':'fake','items':[],'elapsed_ms':10,'error':None}\n"
+        "    sys.stdout.write(json.dumps(res)+'\\n'); sys.stdout.flush()\n",
+        encoding="utf-8",
+    )
+    img = tmp_path / "x.png"
+    img.write_bytes(b"\x89PNG")
+    results = driver.run_contender(
+        contender_id="fake",
+        adapter_cmd=[_python(), str(fake_adapter)],
+        images=[img],
+        warmup=1,
+        measured=2,
+    )
+    assert results["status"] == "ok"
+    assert len(results["samples"]) == 1
+    sample = results["samples"][0]
+    assert sample["median_ms"] == 10
+    assert len(sample["runs"]) == 2
+
+
+def test_run_contender_reports_unavailable_when_cmd_missing() -> None:
+    driver = load_driver_module()
+    results = driver.run_contender(
+        contender_id="missing",
+        adapter_cmd=["definitely-not-a-real-binary-xyz", "arg"],
+        images=[],
+        warmup=0,
+        measured=1,
+    )
+    assert results["status"] == "unavailable"
+    assert results["samples"] == []
+
