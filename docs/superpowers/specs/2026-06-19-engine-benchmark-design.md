@@ -36,7 +36,7 @@ Each contender is a separate configuration to be measured:
 | Id | Engine | Configuration |
 |----|--------|---------------|
 | `paddleocr-default` | PaddleOCR | Current behavior: default model tier, `lang=ch`, `use_textline_orientation=true`. The baseline. |
-| `paddleocr-mobile` | PaddleOCR | Mobile/low-precision model tier where supported by the installed PaddleOCR version. The zero-cost optimization. |
+| `paddleocr-mobile` | PaddleOCR | Lightweight model tier, configured via PaddleOCR 3.x's documented smaller detection/recognition model parameters. If the installed version exposes no clean lightweight switch, this contender degrades to `unavailable` (covered by the failure rule below) rather than guessing args. The zero-cost optimization. |
 | `rapidocr` | RapidOCR (ONNX Runtime) | Default Chinese model, CPU. The primary candidate. |
 
 A contender that fails to install or crashes is reported as `unavailable` and does not abort the run. The benchmark measures whichever contenders are present.
@@ -121,10 +121,12 @@ Both verification files follow the existing `docs/verification/` naming conventi
 scripts/
   benchmark_fixtures.py     # generates samples/benchmark/* + ground_truth.json
   benchmark_engines.py      # driver: orchestrate contenders, time, score, report
-  benchmark_adapter_template.py  # the per-engine adapter shim run in subprocess
+  benchmark_adapters/       # one adapter shim per engine, run as a subprocess
+    paddleocr_adapter.py    # reused for paddleocr-default and paddleocr-mobile (config via arg)
+    rapidocr_adapter.py
 ```
 
-Adapter shims are intentionally minimal: import the engine, load the model once, loop reading image paths from stdin and writing result JSON to stdout. The driver picks the right shim per contender.
+Adapter shims are intentionally minimal: import the engine, load the model once, loop reading image paths from stdin and writing result JSON to stdout. The driver picks the right shim per contender and passes configuration (e.g. model tier) as an argument, so the PaddleOCR shim serves both `paddleocr-default` and `paddleocr-mobile`.
 
 ## Non-Goals / Decisions Deferred
 
