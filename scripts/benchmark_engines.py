@@ -4,6 +4,7 @@ import json
 import re
 import statistics
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -136,3 +137,149 @@ def run_contender(
     proc.stdin.close()
     proc.wait(timeout=30)
     return {"contender_id": contender_id, "status": "ok", "samples": samples}
+
+
+CONTENDERS = [
+    {
+        "id": "paddleocr-default",
+        "adapter": "paddleocr_adapter.py",
+        "extra_args": ["--tier", "default"],
+        "venv": ".venv-bench-paddleocr",
+        "package": "paddleocr paddlepaddle pillow",
+    },
+    {
+        "id": "paddleocr-mobile",
+        "adapter": "paddleocr_adapter.py",
+        "extra_args": ["--tier", "mobile"],
+        "venv": ".venv-bench-paddleocr",
+        "package": "paddleocr paddlepaddle pillow",
+    },
+    {
+        "id": "rapidocr",
+        "adapter": "rapidocr_adapter.py",
+        "extra_args": [],
+        "venv": ".venv-bench-rapidocr",
+        "package": "rapidocr_onnxruntime pillow",
+    },
+]
+
+
+def score_contender(contender: dict[str, Any], truth: list[dict[str, Any]]) -> dict[str, Any]:
+    """Attach accuracy + latency aggregates to a contender's raw results."""
+    if contender["status"] != "ok":
+        return contender
+    truth_by_image = {Path(t["image"]).name: t for t in truth}
+    latencies: list[float] = []
+    char_accs: list[float] = []
+    line_rates: list[float] = []
+    edit_total = 0
+    for sample in contender["samples"]:
+        latencies.append(sample["median_ms"])
+        t = truth_by_image.get(Path(sample["image"]).name)
+        if t is None:
+            continue
+        truth_text = t["text"]
+        candidate = sample["text"] or ""
+        char_accs.append(character_accuracy(truth_text, candidate))
+        line_rates.append(exact_line_match_rate(truth_text, candidate))
+        edit_total += _levenshtein(normalize_text(truth_text), normalize_text(candidate))
+    contender["median_ms_overall"] = median_latency(latencies) if latencies else 0.0
+    contender["char_accuracy_overall"] = sum(char_accs) / len(char_accs) if char_accs else 0.0
+    contender["exact_line_match_overall"] = sum(line_rates) / len(line_rates) if line_rates else 0.0
+    contender["edit_distance_total"] = edit_total
+    return contender
+
+
+def summarize(scored: list[dict[str, Any]]) -> str:
+    """Render a human-readable summary table to a string."""
+    header = (
+        f"{'contender':<22}{'status':<13}{'median_ms':>11}"
+        f"{'char_acc':>10}{'line_acc':>10}{'edit':>8}"
+    )
+    lines = [header, "-" * len(header)]
+    for c in scored:
+        if c["status"] != "ok":
+            lines.append(
+                f"{c['contender_id']:<22}{c['status']:<13}"
+                f"{'-':>11}{'-':>10}{'-':>10}{'-':>8}"
+            )
+            continue
+        lines.append(
+            f"{c['contender_id']:<22}{c['status']:<13}{c['median_ms_overall']:>11.0f}"
+            f"{c['char_accuracy_overall']:>10.2%}{c['exact_line_match_overall']:>10.2%}"
+            f"{c['edit_distance_total']:>8}"
+        )
+    return "\n".join(lines)
+
+
+def main() -> None:
+    import argparse
+    import datetime as dt
+    import platform
+
+    parser = argparse.ArgumentParser(description="Benchmark OCR engine contenders.")
+    parser.add_argument("--fixtures", type=Path, default=Path("samples/benchmark"))
+    parser.add_argument("--warmup", type=int, default=1)
+    parser.add_argument("--measured", type=int, default=5)
+    parser.add_argument("--only", help="comma-separated contender ids to run")
+    args = parser.parse_args()
+
+    truth_path = args.fixtures / "ground_truth.json"
+    if not truth_path.exists():
+        raise SystemExit(
+            f"no fixtures at {truth_path}; run benchmark_fixtures.py first"
+        )
+    truth = json.loads(truth_path.read_text(encoding="utf-8"))
+    images = [args.fixtures / t["image"] for t in truth]
+
+    adapters_dir = Path(__file__).parent / "benchmark_adapters"
+    selected = (
+        CONTENDERS
+        if not args.only
+        else [c for c in CONTENDERS if c["id"] in args.only.split(",")]
+    )
+
+    results: list[dict[str, Any]] = []
+    for contender in selected:
+        # Prefer the engine's own venv python if present, else fall back to current python.
+        bin_dir = "Scripts" if platform.system() == "Windows" else "bin"
+        venv_python = Path(contender["venv"]) / bin_dir / (
+            "python.exe" if platform.system() == "Windows" else "python"
+        )
+        python = str(venv_python) if venv_python.exists() else sys.executable
+        adapter_cmd = [
+            python,
+            str(adapters_dir / contender["adapter"]),
+            *contender["extra_args"],
+        ]
+        raw = run_contender(contender["id"], adapter_cmd, images, args.warmup, args.measured)
+        results.append(score_contender(raw, truth))
+
+    print(summarize(results))
+
+    stamp = dt.date.today().isoformat()
+    out_json = Path("docs/verification") / f"{stamp}-engine-benchmark.json"
+    out_md = Path("docs/verification") / f"{stamp}-engine-benchmark.md"
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "host": platform.node(),
+        "platform": platform.platform(),
+        "python": sys.version,
+        "warmup": args.warmup,
+        "measured": args.measured,
+        "contenders": results,
+    }
+    out_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_md.write_text(
+        f"# OCR Engine Benchmark {stamp}\n\n"
+        f"host: {payload['host']} | {payload['platform']}\n\n"
+        f"```\n{summarize(results)}\n```\n\n"
+        f"Full data: {out_json.name}\n",
+        encoding="utf-8",
+    )
+    print(f"\nwrote {out_json}\nwrote {out_md}")
+
+
+if __name__ == "__main__":
+    main()
+

@@ -101,3 +101,39 @@ def test_run_contender_reports_unavailable_when_cmd_missing() -> None:
     assert results["status"] == "unavailable"
     assert results["samples"] == []
 
+
+def test_score_contender_against_truth() -> None:
+    driver = load_driver_module()
+    truth = [{"image": "a.png", "category": "english-single", "text": "invoice 8866"}]
+    contender = {
+        "contender_id": "fake",
+        "status": "ok",
+        "samples": [
+            {
+                "image": str(Path("a.png")),
+                "median_ms": 50.0,
+                "runs": [50],
+                "text": "invoice 8866",
+                "items": [],
+                "error": None,
+            }
+        ],
+    }
+    scored = driver.score_contender(contender, truth)
+    assert scored["status"] == "ok"
+    assert scored["median_ms_overall"] == 50.0
+    assert scored["char_accuracy_overall"] == 1.0
+    assert scored["exact_line_match_overall"] == 1.0
+    assert scored["edit_distance_total"] == 0
+
+
+def test_score_unavailable_contender() -> None:
+    driver = load_driver_module()
+    scored = driver.score_contender(
+        {"contender_id": "rapidocr", "status": "unavailable", "fatal": "boom", "samples": []},
+        [],
+    )
+    assert scored["status"] == "unavailable"
+    assert scored["fatal"] == "boom"
+
+
