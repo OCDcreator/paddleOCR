@@ -111,10 +111,9 @@ async def test_no_fallback_when_no_known_good_engine(tmp_path) -> None:
     import paddleocr_service.engines.registry as registry
 
     good = _GoodEngine()
-    failing = _FailingEngine()
     settings = make_settings(tmp_path)
     # Start cold: engine is NOT ready (so no known-good target is recorded).
-    failing._ready = False
+    failing = _FailingEngine()
     settings.engine = "failing"
     registry.register("good", lambda s: good)
     registry.register("failing", lambda s: failing)
