@@ -86,3 +86,92 @@ async def test_swap_returns_immediately_and_warms_in_background(tmp_path) -> Non
             pytest.fail("engine never became ready after background warmup")
 
     assert engine.warmup_called is True
+
+
+@pytest.mark.anyio
+async def test_health_reports_warmup_phase(tmp_path) -> None:
+    import paddleocr_service.engines.registry as registry
+
+    warming = _WarmingEngine(None)
+    ready = _ReadyEngine()
+    settings = make_settings(tmp_path)
+    settings.engine = "rapidocr"
+    registry.register("warming", lambda s: warming)
+    registry.register("readyengine", lambda s: ready)
+    transport = ASGITransport(app=create_app(ocr_engine=warming, settings=settings))
+
+    async with AsyncClient(transport=transport, base_url="http://t") as client:
+        # Before swap, no warmup in flight.
+        h = (await client.get("/health")).json()
+        assert h["warmup"]["phase"] == "idle"
+
+        # Swap to a fresh warming engine -> phase should be "warming".
+        await client.patch("/settings", json={"engine": "warming"})
+        h = (await client.get("/health")).json()
+        assert h["warmup"]["phase"] == "warming"
+        assert h["warmup"]["engine"] == "warming"
+        assert h["warmup"]["started_at"] is not None
+
+        # Let it finish -> phase returns to idle.
+        warming.warmup_event.set()
+        for _ in range(50):
+            await asyncio.sleep(0.02)
+            h = (await client.get("/health")).json()
+            if h["warmup"]["phase"] == "idle":
+                break
+        else:
+            pytest.fail("phase never returned to idle")
+
+
+@pytest.mark.anyio
+async def test_swap_cancels_in_flight_warmup(tmp_path) -> None:
+    import paddleocr_service.engines.registry as registry
+
+    warming = _WarmingEngine(None)
+    ready = _ReadyEngine()
+    settings = make_settings(tmp_path)
+    settings.engine = "rapidocr"
+    registry.register("warming", lambda s: warming)
+    registry.register("readyengine", lambda s: ready)
+    transport = ASGITransport(app=create_app(ocr_engine=warming, settings=settings))
+
+    async with AsyncClient(transport=transport, base_url="http://t") as client:
+        # Start a warming warmup, then swap to a ready engine before it finishes.
+        await client.patch("/settings", json={"engine": "warming"})
+        # Warming's warmup is still blocked on its event (not yet set).
+        await client.patch("/settings", json={"engine": "readyengine"})
+
+        # After the second swap, phase must reflect the NEW engine, not the
+        # cancelled warming one. ready is already ready so no warmup is started.
+        h = (await client.get("/health")).json()
+        assert h["warmup"]["phase"] == "idle"
+        assert h["engine"] == "readyengine"
+        assert h["engine_ready"] is True
+
+    # The cancelled warming engine never became ready (its event was never set).
+    assert warming.is_ready is False
+
+
+class _ReadyEngine:
+    """Engine that is immediately ready (no warmup needed)."""
+
+    is_ready = True
+
+    def __init__(self) -> None:
+        pass
+
+    @property
+    def name(self) -> str:
+        return "readyengine"
+
+    def warm_up(self) -> None: ...
+
+    def recognize(self, image_bytes: bytes) -> list: ...
+
+    def apply_settings(self, **opts) -> dict:
+        return opts
+
+    def supported_settings(self) -> list:
+        return []
+
+    def verify_available(self) -> None: ...

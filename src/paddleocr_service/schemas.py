@@ -24,3 +24,4 @@ class HealthResponse(BaseModel):
     settings: dict[str, Any] | None = None
     storage: dict[str, str | int] | None = None
     model_cache_path: str | None = None
+    warmup: dict[str, Any] | None = None

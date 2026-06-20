@@ -44,6 +44,7 @@ def create_app(
 ) -> FastAPI:
     app_settings = settings or get_settings()
     engine = ocr_engine or create_engine(app_settings.engine, app_settings)
+    warmup = WarmupCoordinator()
     storage = LocalStorage(app_settings)
     storage.ensure_base_dirs()
     repository = JobRepository(app_settings.database_path)
@@ -95,6 +96,7 @@ def create_app(
             "engine": app_settings.engine,
             "queue": queue.stats(),
             "version": _package_version(),
+            "warmup": warmup.public_state(),
             "settings": _public_settings(app_settings, engine),
             "storage": {
                 "database_path": str(app_settings.database_path),
@@ -331,14 +333,24 @@ def create_app(
         # immediately (a cold warm_up takes 12-27s). The task is guarded by the
         # engine generation: if another swap supersedes this one before the warmup
         # finishes, the warmup aborts instead of touching the newer engine.
-        if swapped and not engine.is_ready:
-            _start_background_warmup(engine, app_settings.engine)
+        if swapped:
+            # Every swap cancels the prior in-flight warmup. A new warmup is
+            # started only if the newly installed engine is not already ready.
+            if engine.is_ready:
+                warmup.cancel()
+            else:
+                warmup.start(engine, app_settings.engine)
         return _public_settings(app_settings, engine)
 
     @app.post("/operations/warmup")
     async def warmup_model() -> dict[str, Any]:
         if not hasattr(engine, "warm_up"):
             raise HTTPException(status_code=409, detail="OCR engine does not support warmup.")
+        # Manual warmup is synchronous by contract (the caller explicitly asked to
+        # load the model and waits for it). Swap-triggered warmup, by contrast, is
+        # background via WarmupCoordinator. Mark the coordinator idle so /health
+        # does not report a stale "warming" phase from a prior cancelled swap.
+        warmup.cancel()
         await run_in_threadpool(engine.warm_up)
         return {"engine_ready": bool(engine.is_ready), "engine": app_settings.engine}
 
@@ -356,30 +368,63 @@ def create_app(
     return app
 
 
-# Holds in-flight background warmup tasks so they are not garbage-collected
-# mid-run. Tasks remove themselves on completion via a done-callback.
-_background_warmup_tasks: set[Any] = set()
+class WarmupCoordinator:
+    """Tracks the single current background warmup: phase + cancelable task.
 
-
-def _start_background_warmup(engine: Any, engine_name: str) -> None:
-    """Warm ``engine`` in a background task.
-
-    The task warms the exact engine object that was just swapped in. If another
-    swap happens before this finishes, this engine object is simply orphaned (it
-    warms an object nothing references, then it's GC'd) — the live engine is
-    untouched, so no lock or generation check is needed for correctness.
+    phase ∈ {"idle", "warming", "failed"}. A successful warmup surfaces as
+    engine.is_ready True (phase returns to "idle"); a failed one sets phase
+    "failed" with an error message. At most one warmup is tracked at a time:
+    calling start() again cancels any in-flight task (soft cancel — the
+    underlying library call in the threadpool keeps running to completion, but we
+    stop awaiting it and discard its result).
     """
-    async def _warmup() -> None:
-        try:
-            await run_in_threadpool(engine.warm_up)
-        except Exception:
-            # Warmup failures are non-fatal: the next recognize() retries the load
-            # and surfaces a real error if the library is genuinely broken.
-            pass
 
-    task = asyncio.create_task(_warmup())
-    _background_warmup_tasks.add(task)
-    task.add_done_callback(_background_warmup_tasks.discard)
+    def __init__(self) -> None:
+        self.phase: str = "idle"
+        self.started_at: str | None = None
+        self.engine_name: str | None = None
+        self.error: str | None = None
+        self._task: asyncio.Task[None] | None = None
+
+    def start(self, engine: Any, engine_name: str) -> None:
+        self.cancel()
+        self.phase = "warming"
+        self.started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+        self.engine_name = engine_name
+        self.error = None
+
+        async def _warmup() -> None:
+            try:
+                await run_in_threadpool(engine.warm_up)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                self.phase = "failed"
+                self.error = f"{type(exc).__name__}: {exc}"
+                return
+            # If we were cancelled mid-flight, a sibling cancel() already reset
+            # state; only mark success if we are still the tracked task.
+            if self._task is not None and asyncio.current_task() is self._task:
+                self.phase = "idle"
+                self.error = None
+
+        self._task = asyncio.create_task(_warmup())
+
+    def cancel(self) -> None:
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+        self._task = None
+        self.phase = "idle"
+        self.started_at = None
+        self.error = None
+
+    def public_state(self) -> dict[str, Any]:
+        return {
+            "phase": self.phase,
+            "started_at": self.started_at,
+            "engine": self.engine_name,
+            "error": self.error,
+        }
 
 
 app = create_app()
