@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -260,11 +261,12 @@ def create_app(
         return _public_settings(app_settings, engine)
 
     @app.patch("/settings")
-    def update_runtime_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    async def update_runtime_settings(payload: dict[str, Any]) -> dict[str, Any]:
         nonlocal engine
         _validate_settings_patch(payload)
 
         # 1. Swap engine first if requested.
+        swapped = False
         if "engine" in payload and payload["engine"] != app_settings.engine:
             new_name = payload["engine"]
             if new_name not in available_engines():
@@ -288,8 +290,7 @@ def create_app(
                 ) from exc
             app_settings.engine = new_name
             engine = new_engine
-            if app_settings.warmup_on_startup:
-                engine.warm_up()
+            swapped = True
 
         # 2. Apply remaining keys to the (possibly new) current engine.
         engine_keys = {s.key for s in engine.supported_settings()}
@@ -326,6 +327,12 @@ def create_app(
             except Exception as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
         storage.ensure_base_dirs()
+        # After a swap, warm the new engine in the background so the PATCH returns
+        # immediately (a cold warm_up takes 12-27s). The task is guarded by the
+        # engine generation: if another swap supersedes this one before the warmup
+        # finishes, the warmup aborts instead of touching the newer engine.
+        if swapped and not engine.is_ready:
+            _start_background_warmup(engine, app_settings.engine)
         return _public_settings(app_settings, engine)
 
     @app.post("/operations/warmup")
@@ -347,6 +354,32 @@ def create_app(
         return {key: value for key, value in result.items() if key != "job_ids"}
 
     return app
+
+
+# Holds in-flight background warmup tasks so they are not garbage-collected
+# mid-run. Tasks remove themselves on completion via a done-callback.
+_background_warmup_tasks: set[Any] = set()
+
+
+def _start_background_warmup(engine: Any, engine_name: str) -> None:
+    """Warm ``engine`` in a background task.
+
+    The task warms the exact engine object that was just swapped in. If another
+    swap happens before this finishes, this engine object is simply orphaned (it
+    warms an object nothing references, then it's GC'd) — the live engine is
+    untouched, so no lock or generation check is needed for correctness.
+    """
+    async def _warmup() -> None:
+        try:
+            await run_in_threadpool(engine.warm_up)
+        except Exception:
+            # Warmup failures are non-fatal: the next recognize() retries the load
+            # and surfaces a real error if the library is genuinely broken.
+            pass
+
+    task = asyncio.create_task(_warmup())
+    _background_warmup_tasks.add(task)
+    task.add_done_callback(_background_warmup_tasks.discard)
 
 
 app = create_app()
