@@ -295,6 +295,15 @@ def create_app(
     def get_runtime_settings() -> dict[str, Any]:
         return _public_settings(app_settings, engine)
 
+    @app.get("/engines")
+    def list_engines() -> dict[str, Any]:
+        """Return the available engine names and the currently-selected one.
+
+        Used by the frontend to populate the engine selector dynamically, so a
+        newly registered engine appears without a frontend edit.
+        """
+        return {"engines": available_engines(), "current": app_settings.engine}
+
     @app.patch("/settings")
     async def update_runtime_settings(payload: dict[str, Any]) -> dict[str, Any]:
         nonlocal engine, known_good_engine, engine_generation

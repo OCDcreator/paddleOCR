@@ -83,7 +83,7 @@ async function refreshHealth() {
   return safeAction(async () => {
     const data = await jsonFetch("/health");
     serviceStatus.textContent = data.status;
-    modelStatus.textContent = data.ocr_loaded ? "已加载" : "未加载";
+    renderEngineStatus(data);
     queueStatus.textContent = `${data.queue.queued} 等待 / ${data.queue.running} 运行${
       data.queue.paused ? " / 已暂停" : ""
     }`;
@@ -99,9 +99,45 @@ async function refreshHealth() {
   }, "刷新状态失败");
 }
 
+// Render the current engine + warmup phase into the "模型" status card.
+// phase ∈ {idle, warming, failed}; "ready" is idle && engine_ready.
+function renderEngineStatus(data) {
+  const engineName = data.engine || "-";
+  const phase = data.warmup?.phase || "idle";
+  const ready = data.engine_ready;
+  let badgeClass = "badge";
+  let label = "未加载";
+  if (phase === "warming") {
+    badgeClass = "badge badge-blue";
+    label = "预热中";
+  } else if (phase === "failed") {
+    badgeClass = "badge badge-danger";
+    label = "预热失败";
+  } else if (ready) {
+    badgeClass = "badge badge-success";
+    label = "就绪";
+  } else {
+    badgeClass = "badge badge-amber";
+  }
+  const title = data.warmup?.error ? ` title="${data.warmup.error}"` : "";
+  modelStatus.innerHTML = `${engineName} <span class="${badgeClass}"${title}>${label}</span>`;
+}
+
 async function loadSettings() {
   return safeAction(async () => {
-    const settings = await jsonFetch("/settings");
+    const [settings, engines] = await Promise.all([
+      jsonFetch("/settings"),
+      jsonFetch("/engines"),
+    ]);
+    const engineSelect = document.querySelector("#settingEngine");
+    engineSelect.innerHTML = engines.engines
+      .map(
+        (name) =>
+          `<option value="${name}"${name === engines.current ? " selected" : ""}>${name}</option>`,
+      )
+      .join("");
+    // Remember the server's current engine so saveSettings can detect a change.
+    engineSelect.dataset.current = engines.current;
     document.querySelector("#settingLanguage").value = settings.language;
     document.querySelector("#settingPdfScale").value = settings.pdf_render_scale;
     document.querySelector("#settingMaxUploadMb").value = Math.max(
@@ -123,7 +159,9 @@ async function saveSettings(event) {
   event.preventDefault();
   return safeAction(async () => {
     const maxUploadMb = Number(document.querySelector("#settingMaxUploadMb").value || 1);
+    const engineBefore = document.querySelector("#settingEngine").dataset.current || "";
     const payload = {
+      engine: document.querySelector("#settingEngine").value,
       language: document.querySelector("#settingLanguage").value.trim() || "ch",
       pdf_render_scale: Number(document.querySelector("#settingPdfScale").value || 2),
       max_upload_bytes: maxUploadMb * 1024 * 1024,
@@ -139,8 +177,33 @@ async function saveSettings(event) {
     show(saved);
     notify("设置已保存");
     await refreshHealth();
+    // If the engine changed, the new one warms in the background; poll /health
+    // until the phase leaves "warming" so the badge updates live.
+    if (saved.engine && saved.engine !== engineBefore) {
+      pollWarmup();
+    }
     return saved;
   }, "保存设置失败");
+}
+
+// Bounded poll loop for warmup progress. Clears itself once the phase is no
+// longer "warming" or after ~60s (40 ticks * 1.5s). Only started after an engine
+// swap, so it never runs continuously.
+let warmupPollTimer = null;
+function pollWarmup() {
+  if (warmupPollTimer) {
+    clearInterval(warmupPollTimer);
+  }
+  let ticks = 0;
+  warmupPollTimer = setInterval(async () => {
+    ticks += 1;
+    const data = await refreshHealth().catch(() => null);
+    const phase = data?.warmup?.phase;
+    if (phase !== "warming" || ticks >= 40) {
+      clearInterval(warmupPollTimer);
+      warmupPollTimer = null;
+    }
+  }, 1500);
 }
 
 async function refreshJobs() {
