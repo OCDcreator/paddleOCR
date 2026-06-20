@@ -71,7 +71,6 @@ async def test_warmup_failure_rolls_back_to_known_good_engine(tmp_path) -> None:
     import paddleocr_service.engines.registry as registry
 
     good = _GoodEngine()
-    failing = _FailingEngine()
     settings = make_settings(tmp_path)
     settings.engine = "good"
     registry.register("good", lambda s: good)
