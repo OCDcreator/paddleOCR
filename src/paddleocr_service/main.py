@@ -45,6 +45,15 @@ def create_app(
     app_settings = settings or get_settings()
     engine = ocr_engine or create_engine(app_settings.engine, app_settings)
     warmup = WarmupCoordinator()
+    # Last engine confirmed ready (name, instance), used as an auto-fallback
+    # target if a swap's warmup fails. Only set when the current engine is ready,
+    # so we never roll back to an unverified engine.
+    known_good_engine: tuple[str, Any] | None = None
+    if engine.is_ready:
+        known_good_engine = (app_settings.engine, engine)
+    # Bumped on every swap; a background fallback checks it before committing, so
+    # a newer user-initiated swap is never overwritten by a stale rollback.
+    engine_generation = 0
     storage = LocalStorage(app_settings)
     storage.ensure_base_dirs()
     repository = JobRepository(app_settings.database_path)
@@ -83,6 +92,30 @@ def create_app(
             allow_headers=["*"],
         )
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    def _fallback_on_failure() -> None:
+        """Auto-rollback to the last known-good engine when a warmup fails.
+
+        Called from the WarmupCoordinator when the current engine's background
+        warmup raised. Guards against: (a) no known-good target (nothing to roll
+        back to — e.g. startup, or the prior engine was never verified), (b) a
+        newer user swap superseding this one (generation check — never clobber a
+        fresh user intent), and (c) infinite loops (only rolls back to a target
+        that was confirmed ready at swap time, so its warmup is very unlikely to
+        fail; if it does, we stop — phase stays 'failed').
+        """
+        nonlocal engine, app_settings, engine_generation
+        if known_good_engine is None:
+            return
+        # If a newer swap happened since this warmup started, do NOT roll back —
+        # the user's latest intent wins.
+        if engine_generation != warmup.fallback_generation:
+            return
+        name, good_engine = known_good_engine
+        app_settings.engine = name
+        engine = good_engine
+        engine_generation += 1
+        warmup.public_reset_idle()
 
     @app.get("/")
     def index() -> FileResponse:
@@ -264,7 +297,7 @@ def create_app(
 
     @app.patch("/settings")
     async def update_runtime_settings(payload: dict[str, Any]) -> dict[str, Any]:
-        nonlocal engine
+        nonlocal engine, known_good_engine, engine_generation
         _validate_settings_patch(payload)
 
         # 1. Swap engine first if requested.
@@ -290,8 +323,15 @@ def create_app(
                         f"Install its package (e.g. `uv sync --extra {new_name}`)."
                     ),
                 ) from exc
+            # Record the current engine as a fallback target ONLY if it is ready,
+            # so a failed warmup can roll back to a known-good engine (never to an
+            # unverified one). Captured before the swap so it reflects pre-swap state.
+            this_generation = engine_generation + 1
+            if engine.is_ready:
+                known_good_engine = (app_settings.engine, engine)
             app_settings.engine = new_name
             engine = new_engine
+            engine_generation = this_generation
             swapped = True
 
         # 2. Apply remaining keys to the (possibly new) current engine.
@@ -339,7 +379,12 @@ def create_app(
             if engine.is_ready:
                 warmup.cancel()
             else:
-                warmup.start(engine, app_settings.engine)
+                warmup.start(
+                    engine,
+                    app_settings.engine,
+                    on_failure=_fallback_on_failure,
+                    generation=engine_generation,
+                )
         return _public_settings(app_settings, engine)
 
     @app.post("/operations/warmup")
@@ -385,15 +430,27 @@ class WarmupCoordinator:
         self.engine_name: str | None = None
         self.error: str | None = None
         self._task: asyncio.Task[None] | None = None
+        # Generation captured when a warmup starts, so an auto-fallback handler
+        # can tell whether it still owns the current engine or a newer swap
+        # superseded it. Public so the create_app fallback closure can read it.
+        self.fallback_generation: int = 0
 
-    def start(self, engine: Any, engine_name: str) -> None:
+    def start(
+        self,
+        engine: Any,
+        engine_name: str,
+        on_failure: Any = None,
+        generation: int = 0,
+    ) -> None:
         self.cancel()
         self.phase = "warming"
         self.started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         self.engine_name = engine_name
         self.error = None
+        self.fallback_generation = generation
 
         async def _warmup() -> None:
+            failed = False
             try:
                 await run_in_threadpool(engine.warm_up)
             except asyncio.CancelledError:
@@ -401,6 +458,13 @@ class WarmupCoordinator:
             except Exception as exc:  # noqa: BLE001
                 self.phase = "failed"
                 self.error = f"{type(exc).__name__}: {exc}"
+                failed = True
+            if failed:
+                # Hand control to the fallback handler if one was provided. It may
+                # roll back the live engine and reset phase to idle; if it does
+                # nothing, phase stays "failed".
+                if on_failure is not None:
+                    on_failure()
                 return
             # If we were cancelled mid-flight, a sibling cancel() already reset
             # state; only mark success if we are still the tracked task.
@@ -414,6 +478,12 @@ class WarmupCoordinator:
         if self._task is not None and not self._task.done():
             self._task.cancel()
         self._task = None
+        self.phase = "idle"
+        self.started_at = None
+        self.error = None
+
+    def public_reset_idle(self) -> None:
+        """Reset phase/started_at/error to idle (used after a successful rollback)."""
         self.phase = "idle"
         self.started_at = None
         self.error = None
