@@ -8,6 +8,28 @@ from httpx import AsyncClient
 from PIL import Image
 
 from paddleocr_service.config import Settings
+from paddleocr_service.engines.base import SupportedSetting
+
+
+class EngineProtocolMixin:
+    """Shared OCREngine-protocol stubs for test fake engines.
+
+    Provides name/apply_settings/supported_settings so a fake satisfies the
+    OCREngine protocol without each test file repeating them.
+    """
+
+    @property
+    def name(self) -> str:
+        return "fake"
+
+    def apply_settings(self, **opts):
+        return opts
+
+    def supported_settings(self) -> list[SupportedSetting]:
+        return []
+
+    def verify_available(self) -> None:
+        pass
 
 
 class FakeEngine:
@@ -33,9 +55,24 @@ class FakeEngine:
     def warm_up(self) -> None:
         self.warmed = True
 
-    def configure(self, language: str, use_angle_cls: bool) -> None:
-        self.last_language = language
-        self.last_use_angle_cls = use_angle_cls
+    @property
+    def name(self) -> str:
+        return "fake"
+
+    def apply_settings(self, **opts):
+        if "language" in opts:
+            self.last_language = opts["language"]
+        if "use_angle_cls" in opts:
+            self.last_use_angle_cls = opts["use_angle_cls"]
+        return opts
+
+    def supported_settings(self):
+        from paddleocr_service.engines.base import SupportedSetting
+
+        return [
+            SupportedSetting(key="language", type="str", description=""),
+            SupportedSetting(key="use_angle_cls", type="bool", description=""),
+        ]
 
 
 class FlakyEngine(FakeEngine):

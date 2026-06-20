@@ -7,9 +7,10 @@ from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 from paddleocr_service.main import create_app
+from tests.helpers import EngineProtocolMixin
 
 
-class SlowEngine:
+class SlowEngine(EngineProtocolMixin):
     is_ready = True
 
     def recognize(self, image_bytes: bytes):

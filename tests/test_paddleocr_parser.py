@@ -1,4 +1,6 @@
-from paddleocr_service.ocr_engine import parse_paddleocr_result
+from __future__ import annotations
+
+from paddleocr_service.engines.paddleocr.parser import parse_paddleocr_result
 
 
 class _AmbiguousBoolArray:
@@ -6,8 +8,7 @@ class _AmbiguousBoolArray:
 
     Real empty numpy arrays: (1) raise ValueError on boolean conversion
     ("truth value of an empty array is ambiguous"), but (2) ARE iterable and
-    yield zero items. Reproduce both so the test is independent of whether numpy
-    is installed.
+    yield zero items. Reproduce both so the test is independent of numpy.
     """
 
     def __bool__(self) -> bool:
@@ -15,11 +16,6 @@ class _AmbiguousBoolArray:
 
     def __iter__(self):
         return iter(())
-
-
-def _empty_numpy_array() -> _AmbiguousBoolArray:
-    return _AmbiguousBoolArray()
-
 
 
 def test_parse_paddleocr_v2_result_shape() -> None:
@@ -55,20 +51,15 @@ def test_parse_empty_paddleocr_result() -> None:
 
 
 def test_parse_dict_result_with_no_text_detected_returns_empty() -> None:
-    # PaddleOCR returns empty numpy arrays / empty lists when it detects no text
-    # in an image (e.g. a large near-blank canvas). The `or` chain over the box
-    # keys used to raise "truth value of an empty array is ambiguous" because
-    # numpy refuses boolean coercion. This must return [] instead of crashing.
     raw_result = [
         {
             "rec_texts": [],
             "rec_scores": [],
-            "rec_polys": _empty_numpy_array(),
+            "rec_polys": _AmbiguousBoolArray(),
         }
     ]
 
     assert parse_paddleocr_result(raw_result) == []
-
 
 
 def test_parse_paddleocr_v3_result_shape() -> None:

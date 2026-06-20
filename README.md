@@ -27,13 +27,18 @@
 
 推荐 Python `3.11` 到 `3.13`。项目使用 `uv` 管理依赖。
 
+OCR 引擎是可选的,安装时按需选择一个或多个(默认引擎是 RapidOCR):
+
 ```bash
 cd /Volumes/SDD2T/obsidian-vault-write/custom-project/paddleOCR
-uv sync --extra dev
+# 默认: RapidOCR(ONNX),轻量快速,Mac 上比 PaddleOCR 快约 3 倍
+uv sync --extra dev --extra rapidocr
+# 额外装 PaddleOCR(纯中文文档精度略高,可作高精度可选档)
+uv sync --extra dev --extra rapidocr --extra paddleocr
 cp .env.example .env
 ```
 
-首次运行 PaddleOCR 会下载模型，耗时取决于网络和机器性能。
+默认引擎由 `PADDLEOCR_ENGINE` 控制(默认 `rapidocr`),运行时也可通过 `PATCH /settings {"engine":"paddleocr"}` 热切换。首次运行对应引擎会下载模型,耗时取决于网络和机器性能。
 
 ## 启动
 

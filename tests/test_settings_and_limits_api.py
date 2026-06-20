@@ -73,7 +73,7 @@ async def test_warmup_endpoint_loads_model(tmp_path) -> None:
         response = await client.post("/operations/warmup")
 
     assert response.status_code == 200
-    assert response.json()["ocr_loaded"] is True
+    assert response.json()["engine_ready"] is True
     assert engine.warmed is True
 
 
