@@ -20,6 +20,9 @@ const toast = document.querySelector("#toast");
 let selectedJob = null;
 let selectedPageIndex = 0;
 let toastTimer = null;
+// Plain text from the last single-image /ocr result, so copyText/downloads work
+// even though /ocr does not create a job (selectedJob stays null for /ocr).
+let lastOcrText = null;
 
 function show(value) {
   output.textContent =
@@ -368,12 +371,22 @@ async function deleteJob() {
 }
 
 async function copyText() {
-  if (!selectedJob) return;
-  await safeAction(async () => {
-    const text = allPages(selectedJob)
+  // Prefer the selected job's text; fall back to the last single-image /ocr
+  // result (which does not create a job, so selectedJob stays null for it).
+  let text = null;
+  if (selectedJob) {
+    text = allPages(selectedJob)
       .map((page) => page.text)
       .filter(Boolean)
       .join("\n\n");
+  } else if (lastOcrText != null) {
+    text = lastOcrText;
+  }
+  if (text == null) {
+    notify("没有可复制的文本");
+    return;
+  }
+  await safeAction(async () => {
     await navigator.clipboard.writeText(text);
     notify("文本已复制");
   }, "复制失败");
@@ -436,11 +449,40 @@ document.querySelector("#singleForm").addEventListener("submit", async (event) =
     const file = document.querySelector("#singleImage").files[0];
     const formData = new FormData();
     formData.append("image", file);
-    show(await jsonFetch("/ocr", { method: "POST", body: formData }));
+    const result = await jsonFetch("/ocr", { method: "POST", body: formData });
+    // /ocr does not create a job, so stash the text for copyText/downloads and
+    // show it as readable plain text first (raw JSON appended below for detail).
+    lastOcrText = result.text || "";
+    selectedJob = null;
+    output.textContent = result.text || "(未识别到文本)";
+    detailMeta.textContent = `单图识别 · ${result.items?.length || 0} 段 · ${result.elapsed_ms} ms`;
+    // Wire the download buttons to in-memory blobs (single-image /ocr saves no
+    // files server-side, unlike queued jobs which have outputs/<id>/result.*).
+    setSingleImageDownloads(result);
+    // Scroll the result panel into view so the user sees the output.
+    document.querySelector("#resultPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     await refreshHealth();
     notify("单图识别完成");
   }, "单图识别失败");
 });
+
+// Build client-side blob download links for a single-image /ocr result, since
+// /ocr does not persist output files (only queued jobs do).
+function setSingleImageDownloads(result) {
+  const text = result.text || "";
+  const md = text
+    .split("\n")
+    .map((line) => (line.trim() ? line : ""))
+    .join("\n");
+  const json = JSON.stringify(result, null, 2);
+  const blob = (content, type) => URL.createObjectURL(new Blob([content], { type }));
+  downloadTxt.href = blob(text, "text/plain;charset=utf-8");
+  downloadJson.href = blob(json, "application/json;charset=utf-8");
+  downloadMarkdown.href = blob(md, "text/markdown;charset=utf-8");
+  for (const link of [downloadJson, downloadTxt, downloadMarkdown]) {
+    link.classList.remove("disabled");
+  }
+}
 
 document.querySelector("#batchForm").addEventListener("submit", async (event) => {
   event.preventDefault();
